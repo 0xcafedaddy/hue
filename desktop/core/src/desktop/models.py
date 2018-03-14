@@ -30,6 +30,7 @@ except ImportError:
 from itertools import chain
 
 from django.contrib.auth import models as auth_models
+from django.contrib.auth.validators import UnicodeUsernameValidator
 from django.contrib.contenttypes.fields import GenericRelation, GenericForeignKey
 from django.contrib.contenttypes.models import ContentType
 from django.contrib.staticfiles.storage import staticfiles_storage
@@ -53,7 +54,6 @@ from desktop.lib.exceptions_renderable import PopupException
 from desktop.lib.paths import get_run_root
 from desktop.redaction import global_redaction_engine
 from desktop.settings import DOCUMENT2_SEARCH_MAX_LENGTH
-
 
 LOG = logging.getLogger(__name__)
 
@@ -92,10 +92,20 @@ def _version_from_properties(f):
 
 PREFERENCE_IS_WELCOME_TOUR_SEEN = 'is_welcome_tour_seen'
 
+class HueUser(auth_models.User):
+  class Meta:
+    proxy = True
+
+  def __init__(self, *args, **kwargs):
+    self._meta.get_field(
+      'username'
+    ).validators[0] = UnicodeUsernameValidator()
+    super(auth_models.User, self).__init__(*args, **kwargs)
+
 
 class UserPreferences(models.Model):
   """Holds arbitrary key/value strings."""
-  user = models.ForeignKey(auth_models.User)
+  user = models.ForeignKey(HueUser)
   key = models.CharField(max_length=20)
   value = models.TextField(max_length=4096)
 
@@ -147,7 +157,7 @@ class DefaultConfiguration(models.Model):
 
   is_default = models.BooleanField(default=False, db_index=True)
   groups = models.ManyToManyField(auth_models.Group, db_index=True, db_table='defaultconfiguration_groups')
-  user = models.ForeignKey(auth_models.User, blank=True, null=True, db_index=True)
+  user = models.ForeignKey(HueUser, blank=True, null=True, db_index=True)
 
   objects = DefaultConfigurationManager()
 
@@ -271,7 +281,7 @@ class DocumentTag(models.Model):
   """
   Reserved tags can't be manually removed by the user.
   """
-  owner = models.ForeignKey(auth_models.User, db_index=True)
+  owner = models.ForeignKey(HueUser, db_index=True)
   tag = models.SlugField()
 
   DEFAULT = 'default' # Always there
@@ -598,7 +608,7 @@ class DocumentManager(models.Manager):
 
 
 class Document(models.Model):
-  owner = models.ForeignKey(auth_models.User, db_index=True, verbose_name=_t('Owner'), help_text=_t('User who can own the job.'), related_name='doc_owner')
+  owner = models.ForeignKey(HueUser, db_index=True, verbose_name=_t('Owner'), help_text=_t('User who can own the job.'), related_name='doc_owner')
   name = models.CharField(default='', max_length=255)
   description = models.TextField(default='')
 
@@ -759,7 +769,7 @@ class Document(models.Model):
     for name, perm in perms_dict.iteritems():
       users = groups = None
       if perm.get('user_ids'):
-        users = auth_models.User.objects.in_bulk(perm.get('user_ids'))
+        users = HueUser.objects.in_bulk(perm.get('user_ids'))
       else:
         users = []
 
@@ -861,7 +871,7 @@ class DocumentPermission(models.Model):
 
   doc = models.ForeignKey(Document)
 
-  users = models.ManyToManyField(auth_models.User, db_index=True, db_table='documentpermission_users')
+  users = models.ManyToManyField(HueUser, db_index=True, db_table='documentpermission_users')
   groups = models.ManyToManyField(auth_models.Group, db_index=True, db_table='documentpermission_groups')
   perms = models.CharField(default=READ_PERM, max_length=10, choices=( # one perm
     (READ_PERM, 'read'),
@@ -1055,7 +1065,7 @@ class Document2(models.Model):
   TRASH_DIR = '.Trash'
   EXAMPLES_DIR = 'examples'
 
-  owner = models.ForeignKey(auth_models.User, db_index=True, verbose_name=_t('Owner'), help_text=_t('Creator.'), related_name='doc2_owner')
+  owner = models.ForeignKey(HueUser, db_index=True, verbose_name=_t('Owner'), help_text=_t('Creator.'), related_name='doc2_owner')
   name = models.CharField(default='', max_length=255)
   description = models.TextField(default='')
   uuid = models.CharField(default=uuid_default, max_length=36, db_index=True)
@@ -1510,7 +1520,7 @@ class Document2Permission(models.Model):
 
   doc = models.ForeignKey(Document2)
 
-  users = models.ManyToManyField(auth_models.User, db_index=True, db_table='documentpermission2_users')
+  users = models.ManyToManyField(HueUser, db_index=True, db_table='documentpermission2_users')
   groups = models.ManyToManyField(auth_models.Group, db_index=True, db_table='documentpermission2_groups')
 
   perms = models.CharField(default=READ_PERM, max_length=10, db_index=True, choices=( # one perm

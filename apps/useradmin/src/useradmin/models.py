@@ -61,14 +61,12 @@ import django.utils.timezone as dtz
 
 from desktop import appmanager
 from desktop.lib.exceptions_renderable import PopupException
-from desktop.models import SAMPLE_USER_ID, SAMPLE_USER_INSTALL
+from desktop.models import SAMPLE_USER_ID, SAMPLE_USER_INSTALL, HueUser
 from hadoop import cluster
 
 import useradmin.conf
 
-
 LOG = logging.getLogger(__name__)
-
 
 class UserProfile(models.Model):
   """
@@ -94,7 +92,7 @@ class UserProfile(models.Model):
     HUE = 1
     EXTERNAL = 2
 
-  user = models.OneToOneField(auth_models.User, unique=True)
+  user = models.OneToOneField(HueUser, unique=True)
   home_directory = models.CharField(editable=True, max_length=1024, null=True)
   creation_method = models.CharField(editable=True, null=False, max_length=64, default=str(CreationMethod.HUE))
   first_login = models.BooleanField(default=True, verbose_name=_t('First Login'),
@@ -307,14 +305,14 @@ def install_sample_user():
   user = None
 
   try:
-    if auth_models.User.objects.filter(id=SAMPLE_USER_ID).exists():
-      user = auth_models.User.objects.get(id=SAMPLE_USER_ID)
+    if HueUser.objects.filter(id=SAMPLE_USER_ID).exists():
+      user = HueUser.objects.get(id=SAMPLE_USER_ID)
       LOG.info('Sample user found with username "%s" and User ID: %s' % (user.username, user.id))
-    elif auth_models.User.objects.filter(username=SAMPLE_USER_INSTALL).exists():
-      user = auth_models.User.objects.get(username=SAMPLE_USER_INSTALL)
+    elif HueUser.objects.filter(username=SAMPLE_USER_INSTALL).exists():
+      user = HueUser.objects.get(username=SAMPLE_USER_INSTALL)
       LOG.info('Sample user found: %s' % user.username)
     else:
-      user, created = auth_models.User.objects.get_or_create(
+      user, created = HueUser.objects.get_or_create(
         username=SAMPLE_USER_INSTALL,
         password='!',
         is_active=False,
@@ -328,7 +326,7 @@ def install_sample_user():
     if user.username != SAMPLE_USER_INSTALL:
       LOG.warn('Sample user does not have username "%s", will attempt to modify the username.' % SAMPLE_USER_INSTALL)
       with transaction.atomic():
-        user = auth_models.User.objects.get(id=SAMPLE_USER_ID)
+        user = HueUser.objects.get(id=SAMPLE_USER_ID)
         user.username = SAMPLE_USER_INSTALL
         user.save()
   except Exception, ex:
